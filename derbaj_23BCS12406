@@ -1,0 +1,105 @@
+-- Reset table
+DROP TABLE IF EXISTS FeePayments;
+
+-- Create table
+CREATE TABLE FeePayments (
+    payment_id INT PRIMARY KEY,
+    student_name VARCHAR(100) NOT NULL,
+    amount DECIMAL(10,2) CHECK (amount > 0),
+    payment_date DATE NOT NULL
+);
+
+-- PART A: Successful transaction (commit)
+START TRANSACTION;
+INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+VALUES (1, 'Ashish', 5000.00, '2024-06-01');
+INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+VALUES (2, 'Smaran', 4500.00, '2024-06-02');
+INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+VALUES (3, 'Vaibhav', 5500.00, '2024-06-03');
+COMMIT;
+
+SELECT 'Part A Output' AS Info;
+SELECT * FROM FeePayments;
+
+-- PART B: Rollback on duplicate primary key (handler inside procedure)
+DROP PROCEDURE IF EXISTS TestRollbackPartB;
+DELIMITER $$
+CREATE PROCEDURE TestRollbackPartB()
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+    INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+    VALUES (4, 'Kiran', 6000.00, '2024-06-04');
+
+    -- This will fail (duplicate primary key = 1)
+    INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+    VALUES (1, 'Duplicate Ashish', 7000.00, '2024-06-05');
+
+    COMMIT;
+END$$
+DELIMITER ;
+
+CALL TestRollbackPartB();
+
+SELECT 'Part B Output (After Rollback)' AS Info;
+SELECT * FROM FeePayments;
+
+-- PART C: Rollback on constraint violation (NULL name)
+DROP PROCEDURE IF EXISTS TestRollbackPartC;
+DELIMITER $$
+CREATE PROCEDURE TestRollbackPartC()
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+    INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+    VALUES (5, 'Neha', 4800.00, '2024-06-06');
+
+    -- This will fail (student_name is NOT NULL)
+    INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+    VALUES (6, NULL, 5200.00, '2024-06-07');
+
+    COMMIT;
+END$$
+DELIMITER ;
+
+CALL TestRollbackPartC();
+
+SELECT 'Part C Output (After Rollback)' AS Info;
+SELECT * FROM FeePayments;
+
+-- PART D: ACID demo (valid + failing insert -> rollback)
+DROP PROCEDURE IF EXISTS TestRollbackPartD;
+DELIMITER $$
+CREATE PROCEDURE TestRollbackPartD()
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+    -- This insert is valid (would be visible only after COMMIT)
+    INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+    VALUES (7, 'Meena', 6500.00, '2024-06-08');
+
+    -- This will fail (duplicate pk = 2) -> causes rollback of entire transaction
+    INSERT INTO FeePayments (payment_id, student_name, amount, payment_date)
+    VALUES (2, 'Duplicate Smaran', 9000.00, '2024-06-09');
+
+    COMMIT;
+END$$
+DELIMITER ;
+
+CALL TestRollbackPartD();
+
+SELECT 'Part D Output (After Rollback)' AS Info;
+SELECT * FROM FeePayments;
